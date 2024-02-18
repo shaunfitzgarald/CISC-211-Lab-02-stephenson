@@ -51,7 +51,6 @@ asmFunc:
 
     /* save the caller's registers, as required by the ARM calling convention */
     push {r4-r11,LR}
-
     
     /*** STUDENTS: Place your code BELOW this line!!! **************/
 
