@@ -70,8 +70,7 @@ static char * fail = "FAIL";
 // Function signature
 extern int32_t asmFunc(int32_t, int32_t);
 
-// make the variable nameStrPtr available to the C program
-extern uint32_t nameStrPtr;
+extern char * nameStrPtr; // so we can print the name string
 
 // set this to 0 if using the simulator. BUT note that the simulator
 // does NOT support the UART, so there's no way to print output.
@@ -256,9 +255,10 @@ int main ( void )
             isRTCExpired = false;
             isUSARTTxComplete = false;
             snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
-                    "========= Post-test Idle Cycle Number: %ld\r\n"
+                    "========= %s: Post-test Idle Cycle Number: %ld\r\n"
                     "Summary of tests: %ld of %ld tests passed\r\n"
                     "\r\n",
+                    (char *) nameStrPtr,
                     idleCount, totalPassCount, totalTests); 
 
 #if USING_HW 

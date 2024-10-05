@@ -12,6 +12,8 @@
     
 /*** STUDENTS: HINT: this is the string that the C code prints out!  **/
 nameStr: .asciz "Hello. My name is Inigo Montoya."  
+
+ .align
  
 /* initialize a global variable that C can access to print the nameStr */
 .global nameStrPtr
@@ -54,7 +56,7 @@ asmFunc:
     
     /*** STUDENTS: Place your code BELOW this line!!! **************/
 
-    
+ 
     /*** STUDENTS: Place your code ABOVE this line!!! **************/
     
     /* restore the caller's registers, as required by the 
