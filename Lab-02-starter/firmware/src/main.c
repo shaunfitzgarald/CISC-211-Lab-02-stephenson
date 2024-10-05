@@ -93,6 +93,57 @@ static void usartDmaChannelHandler(DMAC_TRANSFER_EVENT event, uintptr_t contextH
 }
 #endif
 
+// return failure count. A return value of 0 means everything passed.
+static int testStringResult(int testNum, 
+                      int32_t *passCount,
+                      int32_t *failCount)
+{
+    // for this lab, each test case corresponds to a single pass or fail
+    // But for future labs, one test case may have multiple pass/fail criteria
+    // So I'm setting it up this way so it'll work for future labs, too --VB
+    *failCount = 0;
+    *passCount = 0;
+    static char *s2 = "OOPS";
+    
+    /* Now check the string */
+    int strTest = strcmp((char *)nameStrPtr, 
+                         "Hello. My name is Inigo Montoya.");
+    if (strTest == 0) // Make sure it changed! 0 means strs are equal
+    {
+        s2 = fail;  // assign the failure string to s1
+        *failCount += 1;  // increment the failure count
+    }
+    else
+    {
+        s2 = pass;  // assign the pass string to s1
+        *passCount += 1;  // increment the pass count
+    }
+           
+    // build the string to be sent out over the serial lines
+    snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
+            "========= Test Number: %d\r\n"
+            "modified name string: %s\r\n"
+            "string test result:   %s\r\n"
+            "\r\n",
+            testNum,
+            (char *)nameStrPtr,
+            s2);
+
+#if USING_HW 
+    // send the string over the serial bus using the UART
+    DMAC_ChannelTransfer(DMAC_CHANNEL_0, uartTxBuffer, \
+        (const void *)&(SERCOM5_REGS->USART_INT.SERCOM_DATA), \
+        strlen((const char*)uartTxBuffer));
+        // spin here until the UART has completed transmission
+        // and the timer has expired
+        //while  (false == isUSARTTxComplete ); 
+        while (isUSARTTxComplete == false);
+#endif
+
+    return *failCount;
+    
+}
+
 
 // return failure count. A return value of 0 means everything passed.
 static int testResult(int testNum, 
@@ -108,8 +159,6 @@ static int testResult(int testNum,
     *failCount = 0;
     *passCount = 0;
     char *s1 = "OOPS";
-    static char *s2 = "OOPS";
-    static bool firstTime = true;
     int32_t correctAnswer = testInp1 + testInp2;
     if (asmResult != correctAnswer)
     {
@@ -122,25 +171,6 @@ static int testResult(int testNum,
         *passCount += 1;  // increment the pass count
     }
     
-    /* only check the string the first time through */
-    if (firstTime == true)
-    {
-        /* Now check the string */
-        int strTest = strcmp((char *)nameStrPtr, 
-                             "Hello. My name is Inigo Montoya.");
-        if (strTest == 0) // Make sure it changed! 0 means strs are equal
-        {
-            s2 = fail;  // assign the failure string to s1
-            *failCount += 1;  // increment the failure count
-        }
-        else
-        {
-            s2 = pass;  // assign the pass string to s1
-            *passCount += 1;  // increment the pass count
-        }
-        firstTime = false; // don't check the strings for subsequent test cases
-    }
-           
     // build the string to be sent out over the serial lines
     snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
             "========= Test Number: %d\r\n"
@@ -149,23 +179,23 @@ static int testResult(int testNum,
             "expected result: %8ld\r\n"
             "actual result:   %8ld\r\n"
             "pass/fail:       %s\r\n\r\n"
-            "modified name string: %s\r\n"
-            "string test result:   %s\r\n"
             "\r\n",
             testNum,
             testInp1,
             testInp2,
             correctAnswer,
             asmResult,
-            s1,
-            (char *)nameStrPtr,
-            s2);
+            s1);
 
 #if USING_HW 
     // send the string over the serial bus using the UART
     DMAC_ChannelTransfer(DMAC_CHANNEL_0, uartTxBuffer, \
         (const void *)&(SERCOM5_REGS->USART_INT.SERCOM_DATA), \
         strlen((const char*)uartTxBuffer));
+        // spin here until the UART has completed transmission
+        // and the timer has expired
+        //while  (false == isUSARTTxComplete ); 
+        while (isUSARTTxComplete == false);
 #endif
 
     return *failCount;
@@ -200,15 +230,21 @@ int main ( void )
     int32_t inp1 = 0;
     int32_t inp2 = 0;
     int32_t result = 0;
+    int32_t strPassCount = 0;
+    int32_t strFailCount = 0;
+    int32_t strMaxTestPoints = 10;  // This must match the points in the lab question rubric!
+    uint32_t strTestPoints = 0;
     int32_t passCount = 0;
     int32_t failCount = 0;
     int32_t totalPassCount = 0;
     int32_t totalFailCount = 0;
+    int32_t codeTestMaxPoints = 30;  // This must match the points in the lab question rubric!
     uint32_t numTestCases = sizeof(inp1Array)/sizeof(inp1Array[0]);
-    
-    // Loop forever
+
+        // Loop forever
     while ( true )
     {
+        bool strTestComplete = false;
         // Do the tests
         for (int testCase = 0; testCase < numTestCases; ++testCase)
         {
@@ -227,6 +263,19 @@ int main ( void )
             // Call our assembly function defined in file asmFunc.s
             result = asmFunc(inp1, inp2);
             
+            if (strTestComplete == false)
+            {
+                // check if the string was modified
+                strTestComplete = true;
+                failCount = testStringResult(testCase,
+                                   &strPassCount,&strFailCount);
+                if (strPassCount == 1)
+                {
+                    strTestPoints = strMaxTestPoints;
+                }
+                
+            }
+            
             // test the result and see if it passed
             failCount = testResult(testCase,inp1,inp2,result,
                                    &passCount,&failCount);
@@ -234,11 +283,9 @@ int main ( void )
             totalFailCount = totalFailCount + failCount;
 
 #if USING_HW
-            // spin here until the UART has completed transmission
-            // and the timer has expired
+            // spin here until the timer has expired
             //while  (false == isUSARTTxComplete ); 
-            while ((isRTCExpired == false) ||
-                   (isUSARTTxComplete == false));
+            while (isRTCExpired == false);
 #endif
 
         } // for each test case
@@ -249,6 +296,9 @@ int main ( void )
         // terminal hooked up in time.
         uint32_t idleCount = 1;
         uint32_t totalTests = totalPassCount + totalFailCount;
+        uint32_t codeTotalScore = codeTestMaxPoints*totalPassCount/totalTests;
+        uint32_t totalScore = codeTotalScore + strTestPoints;
+        
         bool firstTime = true;
         while(true)      // post-test forever loop
         {
@@ -256,10 +306,20 @@ int main ( void )
             isUSARTTxComplete = false;
             snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
                     "========= %s: Post-test Idle Cycle Number: %ld\r\n"
-                    "Summary of tests: %ld of %ld tests passed\r\n"
+                    "Summary of tests: \r\n"
+                    "%ld of 1 string test(s) passed\r\n"
+                    "%ld points out of %ld points for string test\r\n"
+                    "%ld of %ld code tests passed\r\n"
+                    "Score: %ld points out of %ld points for code test\r\n"
+                    "Total score: %ld\r\n"
                     "\r\n",
-                    (char *) nameStrPtr,
-                    idleCount, totalPassCount, totalTests); 
+                    (char *) nameStrPtr,idleCount,
+                    strPassCount,
+                    strTestPoints,strMaxTestPoints,
+                    totalPassCount, totalTests,
+                    codeTotalScore,codeTestMaxPoints,
+                    totalScore
+                    ); 
 
 #if USING_HW 
             DMAC_ChannelTransfer(DMAC_CHANNEL_0, uartTxBuffer, \

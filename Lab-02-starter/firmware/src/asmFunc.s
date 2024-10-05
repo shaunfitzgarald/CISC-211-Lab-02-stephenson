@@ -56,7 +56,7 @@ asmFunc:
     
     /*** STUDENTS: Place your code BELOW this line!!! **************/
 
- 
+
     /*** STUDENTS: Place your code ABOVE this line!!! **************/
     
     /* restore the caller's registers, as required by the 
